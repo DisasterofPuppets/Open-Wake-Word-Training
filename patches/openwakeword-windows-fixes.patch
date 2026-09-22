@@ -1,1 +1,80 @@
-fds
+diff --git a/openwakeword/data.py b/openwakeword/data.py
+index 7a95306..6a3ae77 100755
+--- a/openwakeword/data.py
++++ b/openwakeword/data.py
+@@ -886,8 +886,21 @@ def trim_mmap(mmap_path):
+             mmap_file2.flush()
+ 
+     # Remove old mmaped file
++    # NOTE: patched -- Windows keeps the file locked while a numpy memmap
++    # handle is open (unlike POSIX), so os.remove() fails with
++    # PermissionError unless the mmap is explicitly released first. `del`
++    # alone isn't reliable here (numpy.memmap's internal refs need the
++    # cyclic GC, not just refcounting), so force collection too.
++    del mmap_file1
++    import gc
++    gc.collect()
+     os.remove(mmap_path)
+ 
++    # mmap_file2 (opened 'w+' above) must also be released before renaming it
++    # -- same Windows file-lock issue as mmap_file1 above.
++    del mmap_file2
++    gc.collect()
++
+     # Rename new mmap file to match original
+     os.rename(output_file2, mmap_path)
+ 
+diff --git a/openwakeword/train.py b/openwakeword/train.py
+index 708cdb2..51b70e0 100755
+--- a/openwakeword/train.py
++++ b/openwakeword/train.py
+@@ -642,8 +642,11 @@ if __name__ == '__main__':
+     config = yaml.load(open(args.training_config, 'r').read(), yaml.Loader)
+ 
+     # imports Piper for synthetic sample generation
++    # NOTE: patched to use our own native-Windows generator (avoids the Linux-only
++    # piper-phonemize dependency of the original piper-sample-generator) -- see
++    # this project's README for details
+     sys.path.insert(0, os.path.abspath(config["piper_sample_generator_path"]))
+-    from generate_samples import generate_samples
++    from generate_samples_piper import generate_samples
+ 
+     # Define output locations
+     config["output_dir"] = os.path.abspath(config["output_dir"])
+@@ -868,8 +871,17 @@ if __name__ == '__main__':
+             n_cpus = 1
+         else:
+             n_cpus = n_cpus//2
++        # NOTE: patched -- Windows DataLoader workers use spawn (not fork),
++        # which requires pickling the dataset/generator to send to worker
++        # processes. The label_transforms lambdas above (and generator
++        # closures) aren't picklable, so multiprocessing workers crash with
++        # PicklingError on Windows. Forcing num_workers=0 avoids needing to
++        # pickle anything -- our data comes from memory-mapped arrays, so
++        # single-process loading shouldn't be a meaningful bottleneck.
++        n_cpus = 0 if os.name == "nt" else n_cpus
+         X_train = torch.utils.data.DataLoader(IterDataset(batch_generator),
+-                                              batch_size=None, num_workers=n_cpus, prefetch_factor=16)
++                                              batch_size=None, num_workers=n_cpus,
++                                              prefetch_factor=16 if n_cpus > 0 else None)
+ 
+         X_val_fp = np.load(config["false_positive_validation_data_path"])
+         X_val_fp = np.array([X_val_fp[i:i+input_shape[0]] for i in range(0, X_val_fp.shape[0]-input_shape[0], 1)])  # reshape to match model
+diff --git a/openwakeword/utils.py b/openwakeword/utils.py
+index 5f64e03..88f6e79 100644
+--- a/openwakeword/utils.py
++++ b/openwakeword/utils.py
+@@ -597,6 +597,13 @@ def compute_features_from_generator(generator, n_total, clip_duration, output_fi
+         row_counter += features.shape[0]
+         fp.flush()
+ 
++    # NOTE: patched -- `fp` (opened 'w+') must be released before trim_mmap()
++    # tries to os.remove() this same file; Windows keeps it locked otherwise
++    # (POSIX allows deleting an open-mapped file, Windows does not).
++    del fp
++    import gc
++    gc.collect()
++
+     # Trip empty rows from the mmapped array
+     trim_mmap(output_file)
+ 
