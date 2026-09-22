@@ -1,0 +1,53 @@
+## openWakeWord training config template.
+## Copy this file per wake word (e.g. config/hey_jarvis.yaml), fill in the
+## <PLACEHOLDERS>, and point train.py at it. Everything else in this repo
+## is reusable as-is across every wake word you train.
+
+model_name: "<your_wake_word>"          # e.g. "hey_jarvis" -- used for output filenames
+
+target_phrase:
+  - "<your wake phrase>"                 # e.g. "hey jarvis"
+
+custom_negative_phrases: []              # optional near-miss phrases to train against explicitly
+
+# Recommended minimum is 20,000+ for best results; 10,000 is a reasonable first pass
+# (generation is fast and local here, so this can be raised and re-run later).
+n_samples: 10000
+n_samples_val: 2000
+
+tts_batch_size: 50          # unused by generate_samples_piper.py (kept for train.py compatibility)
+augmentation_batch_size: 16
+
+# Points at this repo's native-Windows drop-in replacement for piper-sample-generator.
+piper_sample_generator_path: "scripts"
+
+# train.py creates <output_dir>/<model_name>/{positive_train,positive_test,negative_train,negative_test}/
+output_dir: "training"
+
+rir_paths:
+  - "augmentation_data/room_impulse_responses"
+
+# Background noise mixing (e.g. AudioSet/FMA) adds real robustness against false positives,
+# but is a large additional download. Left empty by default -- see README's troubleshooting
+# section for why skipping this turned out not to be the false-alarm risk it seems.
+background_paths: []
+background_paths_duplication_rate: []
+
+false_positive_validation_data_path: "features_cache/validation_set_features.npy"
+
+augmentation_rounds: 1
+
+feature_data_files:
+  "ACAV100M_sample": "features_cache/openwakeword_features_ACAV100M_2000_hrs_16bit.npy"
+
+batch_n_per_class:
+  "ACAV100M_sample": 1024
+  "adversarial_negative": 50
+  "positive": 50
+
+model_type: "dnn"
+layer_size: 32
+
+steps: 50000
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2
