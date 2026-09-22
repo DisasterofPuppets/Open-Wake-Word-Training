@@ -1,0 +1,16 @@
+.venv/
+.venv-convert/
+__pycache__/
+*.pyc
+
+# Large downloaded/generated assets -- see README for how to (re)get these
+stock_multispeaker_voices/
+augmentation_data/
+features_cache/
+training/
+model_output/
+openWakeWord/
+
+# Personal recordings / config you'll create from the template
+config/*.yaml
+!config/wake_word.example.yaml

@@ -1,0 +1,52 @@
+# Main training venv requirements for this pipeline.
+# openwakeword itself is NOT listed here -- clone it separately and install
+# with `pip install -e .` after applying patches/openwakeword-windows-fixes.patch
+# (see README for why: it needs to be a local editable install for the patches
+# to apply, and pulling it via pip would fetch the unpatched version).
+#
+# Exact versions this was built and verified against are pinned below; newer
+# versions will likely work too, but if something breaks, pinning to these
+# first is a reasonable place to start debugging from.
+# For a full transitive freeze (incl. CUDA wheels), see requirements-full-freeze.txt.
+
+# torch/torchaudio are NOT listed here -- install.py installs them separately
+# as CUDA or CPU wheels depending on --gpu/--cpu (or auto-detects your GPU).
+
+piper-tts==1.7.0
+librosa==0.11.0
+soundfile==0.14.0
+numpy==2.5.2
+scipy==1.18.1
+
+pronouncing==0.3.0
+acoustics==0.2.6
+webrtcvad==2.0.10
+
+# Real (not silently-falls-back-to-onnx) TFLite inference, for verifying models
+# and for scripts/eval_real_voice.py
+ai-edge-litert==2.2.0
+
+# Required by openwakeword's train.py / data.py / utils.py at import time --
+# NOT installed automatically by the editable `pip install -e .` of
+# openwakeword, since these are only in its optional "full" extras group,
+# which install.py deliberately doesn't request (it pulls in tensorflow,
+# datasets, onnx_tf etc. that this pipeline doesn't use).
+torchinfo==1.8.0
+torchmetrics==1.2.0
+PyYAML==6.0.3
+audiomentations==0.43.1
+torch-audiomentations==0.12.0
+speechbrain==1.1.1
+mutagen==1.47.0
+
+# Required by torch.onnx.export() internally on torch>=2.5 (used by
+# train.py's export_model step) -- not a direct import anywhere in our code
+# or openwakeword's own source, which is why this one wasn't caught by
+# scanning for top-level imports the way the packages above were.
+onnxscript==0.7.1
+
+# Only needed if a target/negative phrase contains a word not in CMUdict
+# (train.py's generate_adversarial_texts, called during --generate_clips,
+# falls back to this for out-of-vocabulary words). "Hey Holly" doesn't hit
+# this path (both words are in CMUdict) but other wake words might.
+deep-phonemizer==0.0.19
